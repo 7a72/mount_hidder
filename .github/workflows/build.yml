@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        run: |
+          git clone https://github.com/bmax121/KernelPatch --depth 1
+          cd KernelPatch/kpms
+          git clone https://github.com/7a72/mount_hidder --depth 1
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28c
+          add-to-path: false
+
+      - name: Build
+        run: cd KernelPatch/kpms/mount_hidder && make
+        env:
+          NDK_PATH: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Upload release
+        uses: actions/upload-artifact@v4
+        with:
+          name: hide_mount
+          path: KernelPatch/kpms/mount_hidder/hide_mount.kpm
