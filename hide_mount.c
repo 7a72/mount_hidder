@@ -13,7 +13,7 @@
 #include <linux/compiler.h>
 #include "hide_mount.h"
 
-KPM_NAME("hide_mount");
+KPM_NAME("mount_hidder");
 KPM_VERSION("1.0.0");
 KPM_LICENSE("GPL v2");
 KPM_AUTHOR("test");
@@ -37,7 +37,7 @@ void before_show_vfsmnt(hook_fargs2_t *args, void *udata){
             return;
         }
         struct seq_file* b_seq_file;
-        b_seq_file = args->arg0;
+        b_seq_file = (struct seq_file *)args->arg0;  // cast to pointer
         args->local.data0 = b_seq_file->count;
     }
 }
@@ -45,7 +45,7 @@ void before_show_vfsmnt(hook_fargs2_t *args, void *udata){
 void after_show_vfsmnt(hook_fargs2_t *args, void *udata){
     if(args->local.data0){
         struct seq_file* o_seq_file;
-        o_seq_file = args->arg0;
+        o_seq_file = (struct seq_file *)args->arg0;  // cast to pointer
         size_t bcount = (size_t)args->local.data0;
         int llen = o_seq_file->count - bcount;
         if(unlikely(llen==0)){
@@ -55,24 +55,22 @@ void after_show_vfsmnt(hook_fargs2_t *args, void *udata){
         memcpy(lstr,o_seq_file->buf+bcount,llen);
         for(int i=0;i<TARGET_PATH_NUM;i++){
             if(unlikely(strstr(lstr,target_path[i]))){
-                logkd("hide mount:%s\n",lstr);
+                logkd("[mount_hidder]:%s\n",lstr);
                 o_seq_file->count = bcount;
                 break;
             }
         }
     }
-
 }
 
 static long hide_mount_init(const char *args, const char *event, void *__user reserved)
 {
     strcpy(target_path[0],"/debug_ramdisk");
-    strcpy(target_path[1],"/apex/com.android.art/bin/dex2oat64");
-    strcpy(target_path[2],"/apex/com.android.art/bin/dex2oat32");
+    strcpy(target_path[1],"/data/adb/storage-isolation/.tmp");
     get_task_mm = (typeof(get_task_mm))kallsyms_lookup_name("get_task_mm");
-    show_vfsmnt_addr = kallsyms_lookup_name("show_vfsmnt");
-    show_mountinfo_addr = kallsyms_lookup_name("show_mountinfo");
-    show_vfsstat_addr = kallsyms_lookup_name("show_vfsstat");
+    show_vfsmnt_addr = (void *)kallsyms_lookup_name("show_vfsmnt");  // cast to pointer
+    show_mountinfo_addr = (void *)kallsyms_lookup_name("show_mountinfo");  // cast to pointer
+    show_vfsstat_addr = (void *)kallsyms_lookup_name("show_vfsstat");  // cast to pointer
     logkd("show_vfsmnt_addr:%llx,show_mountinfo_addr:%llx,show_vfsstat_addr:%llx\n",show_vfsmnt_addr,show_mountinfo_addr,show_vfsstat_addr);
     if(show_vfsmnt_addr){
         hook_wrap2((void *)show_vfsmnt_addr,before_show_vfsmnt,after_show_vfsmnt,0);
@@ -83,7 +81,7 @@ static long hide_mount_init(const char *args, const char *event, void *__user re
     if(show_vfsstat_addr){
         hook_wrap2((void *)show_vfsstat_addr,before_show_vfsmnt,after_show_vfsmnt,0);
     }
-    logkd("kpm hide_mount init\n");
+    logkd("[mount_hidder]: init\n");
     return 0;
 }
 
@@ -103,7 +101,9 @@ static long hide_mount_exit(void *__user reserved)
     if(show_vfsstat_addr){
         unhook((void *)show_vfsstat_addr);
     }
-    logkd("kpm hide_mount  exit\n");
+    logkd("[mount_hidder]: exit\n");
+
+    return 0;
 }
 
 KPM_INIT(hide_mount_init);
